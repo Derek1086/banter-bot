@@ -7,6 +7,7 @@ import datetime
 from dotenv import load_dotenv
 import openai
 from openai import AsyncOpenAI
+from keep_alive import keep_alive
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -163,6 +164,13 @@ async def banter_command(interaction: discord.Interaction, username: discord.Mem
     Sends:
         A confirmation message and an initial banter message to the user.
     """
+    # Prevent self-banter
+    if username.id == interaction.client.user.id:
+        await interaction.response.send_message(
+            "Oi, I’m not roasting meself, mate. Pick someone else.", ephemeral=True
+        )
+        return
+
     target_user = username 
 
     if target_user.id in active_banter_users:
@@ -207,4 +215,5 @@ async def welcome_command(interaction: discord.Interaction, user: discord.Member
     await interaction.response.send_message(f"Simulating welcome for {user.mention}...", ephemeral=True)
     await client.on_member_join(user)
 
+keep_alive()
 client.run(token)
