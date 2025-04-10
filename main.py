@@ -4,6 +4,8 @@ import os
 import random
 import asyncio
 import datetime
+import signal
+import sys
 from dotenv import load_dotenv
 import openai
 from openai import AsyncOpenAI
@@ -80,12 +82,12 @@ async def generate_banter(username, user_message=None):
                             "You are a grumpy but lovable old British man who's full of witty insults, sarcasm, and dry humour. "
                             "You love a good cheeky roast and use British slang like 'muppet', 'numpty', 'bloke', 'dodgy', etc. "
                             "You're never cruel or hurtful — just snarky, clever, and endearingly rude. "
-                            "Keep responses under 50 words. You're talking to a mate you’ve known for years."
+                            "Keep responses under 50 words. You're talking to a mate you've known for years."
                         )
                     },
                     {
                         "role": "user",
-                        "content": f"Respond to {username}’s message with a witty, sarcastic, cheeky roast. The message was: {user_message}"
+                        "content": f"Respond to {username}'s message with a witty, sarcastic, cheeky roast. The message was: {user_message}"
                     }
                 ]
             )
@@ -100,7 +102,7 @@ async def generate_banter(username, user_message=None):
                             "You are a grumpy but lovable old British man who's full of witty insults, sarcasm, and dry humour. "
                             "You love a good cheeky roast and use British slang like 'muppet', 'numpty', 'bloke', 'dodgy', etc. "
                             "You're never cruel or hurtful — just snarky, clever, and endearingly rude. "
-                            "Keep responses under 50 words. You're talking to a mate you’ve known for years."
+                            "Keep responses under 50 words. You're talking to a mate you've known for years."
                         )
                     },
                     {
@@ -114,7 +116,7 @@ async def generate_banter(username, user_message=None):
         return response.choices[0].message.content
     except Exception as e:
         print(f"Error generating banter: {e}")
-        return f"Oi {username}, consider yourself lucky — my insult generator’s knackered today."
+        return f"Oi {username}, consider yourself lucky — my insult generator's knackered today."
 
 
 async def schedule_random_banter(user_id, max_seconds):
@@ -167,7 +169,7 @@ async def banter_command(interaction: discord.Interaction, username: discord.Mem
     # Prevent self-banter
     if username.id == interaction.client.user.id:
         await interaction.response.send_message(
-            "Oi, I’m not roasting meself, mate. Pick someone else.", ephemeral=True
+            "Oi, I'm not roasting meself, mate. Pick someone else.", ephemeral=True
         )
         return
 
@@ -215,5 +217,52 @@ async def welcome_command(interaction: discord.Interaction, user: discord.Member
     await interaction.response.send_message(f"Simulating welcome for {user.mention}...", ephemeral=True)
     await client.on_member_join(user)
 
+@client.tree.command(name="shutdown", description="Safely shut down the bot (admin only)")
+async def shutdown_command(interaction: discord.Interaction):
+    """
+    Safely shuts down the bot.
+    
+    Args:
+        interaction (discord.Interaction): The interaction that triggered the command.
+    """
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("You don't have permission to shut down the bot.", ephemeral=True)
+        return
+    
+    await interaction.response.send_message("Shutting down the bot...", ephemeral=True)
+    print("Shutdown command received. Shutting down...")
+    
+    await client.close()
+    os._exit(0) 
+
+def signal_handler(sig, frame):
+    print(f"Received signal {sig}. Shutting down...")
+    
+    # Schedule the shutdown coroutine
+    if client.loop.is_running():
+        asyncio.create_task(shutdown())
+    else:
+        sys.exit(0)
+
+async def shutdown():
+    """Performs graceful shutdown of the bot."""
+    print("Closing Discord connection...")
+    await client.close()
+    
+    # Wait a moment to ensure connections are closed
+    await asyncio.sleep(1)
+    
+    os._exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+signal.signal(signal.SIGTERM, signal_handler)  # Kill command
+
 keep_alive()
-client.run(token)
+
+if __name__ == "__main__":
+    try:
+        client.run(token)
+    except Exception as e:
+        print(f"Error running bot: {e}")
+        if client.loop.is_running():
+            client.loop.run_until_complete(client.close())
